@@ -10,6 +10,9 @@ echo "============================================"
 echo "    SOCKS5 一键部署脚本 (Dante)"
 echo "============================================"
 
+# 解决管道符导致 read 跳过的问题：强制从当前终端读取输入
+exec < /dev/tty
+
 # 交互式输入配置信息
 read -p "请输入 SOCKS5 端口 (默认 1080): " PORT
 PORT=${PORT:-1080}
@@ -22,10 +25,11 @@ while [ -z "$PASS" ]; do
     read -p "密码不能为空，请重新输入: " PASS
 done
 
-echo "正在安装并配置..."
+echo "--------------------------------------------"
+echo "正在安装并配置，请稍候..."
 
-# 1. 安装服务
-apt update && apt install dante-server -y
+# 1. 更新并安装 Dante
+apt-get update && apt-get install dante-server -y
 
 # 2. 获取主网卡名称
 INTERFACE=$(ip route get 8.8.8.8 | awk -- '{print $5; exit}')
@@ -52,19 +56,18 @@ sockspass {
 }
 EOF
 
-# 4. 处理用户逻辑
-# 如果用户已存在则删除重建，确保密码更新
+# 4. 处理用户逻辑（如果存在则先删除，确保更新）
 if id "$USER" &>/dev/null; then
     userdel -r "$USER" 2>/dev/null
 fi
 useradd -r -s /bin/false "$USER"
 echo "$USER:$PASS" | chpasswd
 
-# 5. 重启并检查服务状态
+# 5. 重启并设置开机自启
 systemctl restart danted
 systemctl enable danted
 
-# 6. 获取 IP 地址
+# 6. 获取公网 IP
 IP=$(curl -s ifconfig.me)
 
 echo "============================================"
@@ -75,3 +78,6 @@ echo "用户名: $USER"
 echo "密码: $PASS"
 echo "============================================"
 echo "请确保防火墙已放行 TCP 端口: $PORT"
+
+# 恢复标准输入
+exec < /dev/stdin
